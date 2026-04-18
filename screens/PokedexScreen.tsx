@@ -1,5 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TextInput, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  StyleSheet,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
 import { getPokemons, getPokemonDetails } from '../services/api';
 import { Pokemon } from '../types/Pokemon';
 import { PokemonCard } from '../components/PokemonCard';
@@ -7,21 +15,55 @@ import { PokemonCard } from '../components/PokemonCard';
 export const PokedexScreen = () => {
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const list = await getPokemons(30); // primeiros 30 pokemons
+  const loadInitial = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const list = await getPokemons(30);
       const details = await Promise.all(
         list.map((p) => getPokemonDetails(p.url)),
       );
       setPokemons(details);
-    };
-    fetchData();
+    } catch {
+      setError(
+        'Falha ao carregar Pokémons. Verifique sua conexão.',
+      );
+      setPokemons([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadInitial();
+  }, [loadInitial]);
 
   const filtered = pokemons.filter((p) =>
     p.name.includes(search.toLowerCase()),
   );
+
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" />
+        <Text style={styles.loadingText}>Carregando Pokémons…</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable style={styles.retry} onPress={loadInitial}>
+          <Text style={styles.retryText}>Tentar novamente</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -43,6 +85,21 @@ export const PokedexScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: 16 },
+  centered: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  errorText: { textAlign: 'center', fontSize: 16, marginBottom: 16 },
+  retry: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: { color: '#fff', fontWeight: '600' },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 12 },
   input: {
     backgroundColor: '#f1f1f1',
