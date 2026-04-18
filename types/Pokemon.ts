@@ -9,3 +9,8 @@ export interface Pokemon {
   image: string;
   types: string[];
 }
+
+export interface PokemonDetail extends Pokemon {
+  height: number;
+  weight: number;
+}
