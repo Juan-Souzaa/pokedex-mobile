@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,26 +12,38 @@ import { getPokemons, getPokemonDetails } from '../services/api';
 import { Pokemon } from '../types/Pokemon';
 import { PokemonCard } from '../components/PokemonCard';
 
+const PAGE_SIZE = 30;
+
 export const PokedexScreen = () => {
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadingMoreLock = useRef(false);
 
   const loadInitial = useCallback(async () => {
+    loadingMoreLock.current = false;
     setIsLoading(true);
     setError(null);
+    setHasMore(true);
+    setNextOffset(0);
     try {
-      const list = await getPokemons(30);
+      const list = await getPokemons(PAGE_SIZE, 0);
       const details = await Promise.all(
         list.map((p) => getPokemonDetails(p.url)),
       );
       setPokemons(details);
+      setNextOffset(list.length);
+      setHasMore(list.length === PAGE_SIZE);
     } catch {
       setError(
         'Falha ao carregar Pokémons. Verifique sua conexão.',
       );
       setPokemons([]);
+      setHasMore(false);
     } finally {
       setIsLoading(false);
     }
@@ -40,6 +52,28 @@ export const PokedexScreen = () => {
   useEffect(() => {
     loadInitial();
   }, [loadInitial]);
+
+  const loadMorePokemons = useCallback(async () => {
+    if (isLoading || !hasMore || loadingMoreLock.current) return;
+    loadingMoreLock.current = true;
+    setIsLoadingMore(true);
+    try {
+      const list = await getPokemons(PAGE_SIZE, nextOffset);
+      if (list.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      const details = await Promise.all(
+        list.map((p) => getPokemonDetails(p.url)),
+      );
+      setPokemons((prev) => [...prev, ...details]);
+      setNextOffset((prev) => prev + list.length);
+      setHasMore(list.length === PAGE_SIZE);
+    } finally {
+      loadingMoreLock.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [isLoading, hasMore, nextOffset]);
 
   const query = search.trim().toLowerCase();
   const filtered = pokemons.filter((p) =>
@@ -79,6 +113,13 @@ export const PokedexScreen = () => {
         keyExtractor={(item) => item.id.toString()}
         numColumns={2}
         renderItem={({ item }) => <PokemonCard pokemon={item} />}
+        onEndReached={loadMorePokemons}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <ActivityIndicator style={styles.footerLoader} />
+          ) : null
+        }
         ListEmptyComponent={
           <Text style={styles.emptyText}>
             {query.length > 0
@@ -121,4 +162,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#444',
   },
+  footerLoader: { marginVertical: 16 },
 });
