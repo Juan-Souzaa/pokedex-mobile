@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,30 +15,44 @@ import { PokemonCard } from '../components/PokemonCard';
 
 const PAGE_SIZE = 30;
 
+function mergeUniqueById(prev: Pokemon[], next: Pokemon[]): Pokemon[] {
+  const seen = new Set(prev.map((p) => p.id));
+  const out = [...prev];
+  for (const p of next) {
+    if (!seen.has(p.id)) {
+      seen.add(p.id);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 export const PokedexScreen = () => {
   const insets = useSafeAreaInsets();
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadingMoreLock = useRef(false);
+  const listOffsetRef = useRef(0);
+  const endReachedCooldownRef = useRef(false);
 
   const loadInitial = useCallback(async () => {
     loadingMoreLock.current = false;
+    endReachedCooldownRef.current = false;
+    listOffsetRef.current = 0;
     setIsLoading(true);
     setError(null);
     setHasMore(true);
-    setNextOffset(0);
     try {
       const list = await getPokemons(PAGE_SIZE, 0);
       const details = await Promise.all(
         list.map((p) => getPokemonDetails(p.url)),
       );
-      setPokemons(details);
-      setNextOffset(list.length);
+      setPokemons(mergeUniqueById([], details));
+      listOffsetRef.current = list.length;
       setHasMore(list.length === PAGE_SIZE);
     } catch {
       setError(
@@ -46,6 +60,7 @@ export const PokedexScreen = () => {
       );
       setPokemons([]);
       setHasMore(false);
+      listOffsetRef.current = 0;
     } finally {
       setIsLoading(false);
     }
@@ -56,11 +71,19 @@ export const PokedexScreen = () => {
   }, [loadInitial]);
 
   const loadMorePokemons = useCallback(async () => {
-    if (isLoading || !hasMore || loadingMoreLock.current) return;
+    if (
+      isLoading ||
+      !hasMore ||
+      loadingMoreLock.current ||
+      endReachedCooldownRef.current
+    ) {
+      return;
+    }
+    const offset = listOffsetRef.current;
     loadingMoreLock.current = true;
     setIsLoadingMore(true);
     try {
-      const list = await getPokemons(PAGE_SIZE, nextOffset);
+      const list = await getPokemons(PAGE_SIZE, offset);
       if (list.length === 0) {
         setHasMore(false);
         return;
@@ -68,19 +91,36 @@ export const PokedexScreen = () => {
       const details = await Promise.all(
         list.map((p) => getPokemonDetails(p.url)),
       );
-      setPokemons((prev) => [...prev, ...details]);
-      setNextOffset((prev) => prev + list.length);
+      setPokemons((prev) => mergeUniqueById(prev, details));
+      listOffsetRef.current = offset + list.length;
       setHasMore(list.length === PAGE_SIZE);
     } finally {
       loadingMoreLock.current = false;
       setIsLoadingMore(false);
+      endReachedCooldownRef.current = true;
+      setTimeout(() => {
+        endReachedCooldownRef.current = false;
+      }, 450);
     }
-  }, [isLoading, hasMore, nextOffset]);
+  }, [isLoading, hasMore]);
 
   const query = search.trim().toLowerCase();
-  const filtered = pokemons.filter((p) =>
-    p.name.toLowerCase().includes(query),
-  );
+  const isSearching = search.trim().length > 0;
+  const handleEndReached = useCallback(() => {
+    if (!isSearching) loadMorePokemons();
+  }, [isSearching, loadMorePokemons]);
+
+  const filtered = useMemo(() => {
+    const arr = pokemons.filter((p) =>
+      p.name.toLowerCase().includes(query),
+    );
+    const seen = new Set<number>();
+    return arr.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [pokemons, query]);
 
   if (isLoading) {
     return (
@@ -117,14 +157,18 @@ export const PokedexScreen = () => {
       />
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => String(item.id)}
         numColumns={2}
         renderItem={({ item }) => <PokemonCard pokemon={item} />}
-        onEndReached={loadMorePokemons}
-        onEndReachedThreshold={0.35}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.15}
         ListFooterComponent={
-          isLoadingMore ? (
-            <ActivityIndicator style={styles.footerLoader} />
+          hasMore ? (
+            <View style={styles.footerSlot}>
+              {isLoadingMore ? (
+                <ActivityIndicator style={styles.footerLoader} />
+              ) : null}
+            </View>
           ) : null
         }
         ListEmptyComponent={
@@ -169,5 +213,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#444',
   },
-  footerLoader: { marginVertical: 16 },
+  footerSlot: {
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerLoader: { marginVertical: 8 },
 });
