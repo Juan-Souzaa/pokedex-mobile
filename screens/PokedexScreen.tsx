@@ -41,8 +41,9 @@ export const PokedexScreen = () => {
     loadInitial();
   }, [loadInitial]);
 
+  const query = search.trim().toLowerCase();
   const filtered = pokemons.filter((p) =>
-    p.name.includes(search.toLowerCase()),
+    p.name.toLowerCase().includes(query),
   );
 
   if (isLoading) {
@@ -78,6 +79,13 @@ export const PokedexScreen = () => {
         keyExtractor={(item) => item.id.toString()}
         numColumns={2}
         renderItem={({ item }) => <PokemonCard pokemon={item} />}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {query.length > 0
+              ? `Nenhum Pokémon encontrado para '${search.trim()}'.`
+              : 'Nenhum Pokémon para exibir no momento.'}
+          </Text>
+        }
       />
     </View>
   );
@@ -106,5 +114,11 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginBottom: 20,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 24,
+    fontSize: 16,
+    color: '#444',
   },
 });
