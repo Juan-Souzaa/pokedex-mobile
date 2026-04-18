@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { Pokemon } from '../types/Pokemon';
+import { capitalize } from '../utils/format';
 
 interface Props {
   pokemon: Pokemon;
@@ -10,7 +11,7 @@ export const PokemonCard = ({ pokemon }: Props) => {
   return (
     <View style={styles.card}>
       <Image source={{ uri: pokemon.image }} style={styles.image} />
-      <Text style={styles.name}>{pokemon.name}</Text>
+      <Text style={styles.name}>{capitalize(pokemon.name)}</Text>
     </View>
   );
 };

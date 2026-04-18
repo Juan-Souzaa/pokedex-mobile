@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getPokemons, getPokemonDetails } from '../services/api';
 import { Pokemon } from '../types/Pokemon';
 import { PokemonCard } from '../components/PokemonCard';
@@ -15,6 +16,7 @@ import { PokemonCard } from '../components/PokemonCard';
 const PAGE_SIZE = 30;
 
 export const PokedexScreen = () => {
+  const insets = useSafeAreaInsets();
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +84,7 @@ export const PokedexScreen = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { paddingTop: insets.top + 16 }]}>
         <ActivityIndicator size="large" />
         <Text style={styles.loadingText}>Carregando Pokémons…</Text>
       </View>
@@ -91,7 +93,7 @@ export const PokedexScreen = () => {
 
   if (error) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.errorText}>{error}</Text>
         <Pressable style={styles.retry} onPress={loadInitial}>
           <Text style={styles.retryText}>Tentar novamente</Text>
@@ -101,7 +103,12 @@ export const PokedexScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top + 8, paddingBottom: insets.bottom },
+      ]}
+    >
       <Text style={styles.title}>Pokédex</Text>
       <TextInput
         placeholder="Buscar pokémon..."
@@ -133,7 +140,7 @@ export const PokedexScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 16 },
+  container: { flex: 1, paddingHorizontal: 16 },
   centered: {
     flex: 1,
     paddingHorizontal: 24,
